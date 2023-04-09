@@ -1,6 +1,6 @@
 FROM node:alpine AS builder
 
-RUN apk add --no-cache git libc6-compat
+RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
 
@@ -9,6 +9,8 @@ COPY package.json yarn.lock ./
 RUN yarn install
 
 COPY . .
+
+ARG DOCKER=true
 
 RUN yarn build 
 
