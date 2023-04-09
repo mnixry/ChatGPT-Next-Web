@@ -9,21 +9,41 @@ export const config = {
 };
 
 export class ObtainFreeTokenHelper {
-  static freeTokenProvider =
+  private freeTokenProvider =
     process.env.FREE_TOKEN_PROVIDER || "https://freeopenai.xyz/api.txt";
+  private tokenResponseCacheTime = process.env.TOKEN_RESPONSE_CACHE_TIME
+    ? Number(process.env.TOKEN_RESPONSE_CACHE_TIME)
+    : 5 * 60 * 1000;
+  private tokenValidityTime = process.env.TOKEN_VALIDITY_TIME
+    ? Number(process.env.TOKEN_VALIDITY_TIME)
+    : 60 * 60 * 1000;
   private tokenList: string[] = [];
 
   async obtainTokens() {
     const obtainedTokens: string[] = [];
-    const tokens = await fetch(ObtainFreeTokenHelper.freeTokenProvider)
+    let tokensText: string | undefined = undefined;
+
+    tokensText = await fetch(this.freeTokenProvider, {
+      next: { revalidate: this.tokenResponseCacheTime },
+    })
       .then((res) => res.text())
       .catch(() => undefined);
-    if (!tokens) {
+
+    if (!tokensText) {
       console.log("[TokenObtainer] failed to obtain free token");
       return;
     }
-    obtainedTokens.push(...tokens.split("\n").map((token) => token.trim()));
-    console.log("[TokenObtainer] set free token, amount: ", obtainedTokens.length);
+
+    obtainedTokens.push(
+      ...tokensText
+        .split("\n")
+        .map((token) => token.trim())
+        .filter((token) => token.match(/^\w+?-\w+?$/)),
+    );
+    console.log(
+      "[TokenObtainer] set free token, amount: ",
+      obtainedTokens.length,
+    );
 
     await this.checkAndSetAllTokens(obtainedTokens);
 
@@ -65,6 +85,7 @@ export class ObtainFreeTokenHelper {
           prompt: "This is a test",
           max_tokens: 5,
         }),
+        next: { revalidate: this.tokenValidityTime },
       },
     ).then((res) => res.json());
     const available =
@@ -107,7 +128,7 @@ export async function middleware(req: NextRequest) {
   if (!token) {
     let apiKey =
       process.env.OPENAI_API_KEY ||
-      (await new ObtainFreeTokenHelper().obtainTokens().catch(() => undefined));
+      (await new ObtainFreeTokenHelper().obtainTokens());
     if (apiKey) {
       console.log("[Auth] set system token");
       req.headers.set("token", apiKey);
