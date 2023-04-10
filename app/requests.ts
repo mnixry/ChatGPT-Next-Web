@@ -2,7 +2,9 @@ import type { ChatRequest, ChatReponse } from "./api/openai/typing";
 import { Message, ModelConfig, useAccessStore, useChatStore } from "./store";
 import { showToast } from "./components/ui-lib";
 
-const TIME_OUT_MS = 30000;
+const TIME_OUT_MS = process.env.TIME_OUT_MS
+  ? Number(process.env.TIME_OUT_MS)
+  : 90 * 1000;
 
 const makeRequestParam = (
   messages: Message[],
