@@ -17,7 +17,6 @@ export class ObtainFreeTokenHelper {
   private tokenValidityTime = process.env.TOKEN_VALIDITY_TIME
     ? Number(process.env.TOKEN_VALIDITY_TIME)
     : 60 * 60 * 1000;
-  private tokenList: string[] = [];
 
   async obtainTokens() {
     const obtainedTokens: string[] = [];
@@ -45,33 +44,27 @@ export class ObtainFreeTokenHelper {
       obtainedTokens.length,
     );
 
-    await this.checkAndSetAllTokens(obtainedTokens);
+    obtainedTokens.sort(() => Math.random() - 0.5);
 
-    if (this.tokenList.length === 0) {
-      console.log("[TokenObtainer] no available token");
-      return;
-    }
-    return this.tokenList[Math.floor(Math.random() * this.tokenList.length)];
+    return this.raceAvailableToken(obtainedTokens);
   }
 
-  private async checkAndSetAllTokens(newTokens: string[]) {
+  private async raceAvailableToken(tokens: string[]) {
     const tokenAvailabilityMap: Record<string, boolean> = {};
-    for (const token of newTokens) tokenAvailabilityMap[token] = false;
-    for (const token of this.tokenList) tokenAvailabilityMap[token] = false;
-    await Promise.all(
-      Object.keys(tokenAvailabilityMap).map(
-        async (token) =>
-          (tokenAvailabilityMap[token] = await this.checkTokenAvailability(
-            token,
-          ).catch(() => false)),
-      ),
+    for (const token of tokens) tokenAvailabilityMap[token] = false;
+
+    const token = await new Promise<string | undefined>((resolve, reject) =>
+      Promise.allSettled(
+        tokens.map((token) => this.checkTokenAvailability(token).then(resolve)),
+      )
+        .then(() => resolve(undefined))
+        .catch(reject),
     );
-    this.tokenList = Object.keys(tokenAvailabilityMap).filter(
-      (token) => tokenAvailabilityMap[token],
-    );
+
+    return token;
   }
 
-  private async checkTokenAvailability(token: string): Promise<boolean> {
+  private async checkTokenAvailability(token: string) {
     const response = await fetch(
       `${common.PROTOCOL}://${common.BASE_URL}/v1/completions`,
       {
@@ -98,7 +91,8 @@ export class ObtainFreeTokenHelper {
         available ? "available" : "not available"
       }`,
     );
-    return available;
+    if (!available) throw null;
+    return token;
   }
 }
 
